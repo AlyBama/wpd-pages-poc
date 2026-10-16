@@ -41,3 +41,15 @@ def save_share(token: str, record: dict) -> None:
 def get_share(token: str):
     with _lock:
         return _read_all().get(token)
+
+
+def update_share(token: str, patch: dict) -> bool:
+    """يدمج حقولًا في سجل موجود. يعيد True عند النجاح."""
+    with _lock:
+        data = _read_all()
+        rec = data.get(token)
+        if not isinstance(rec, dict):
+            return False
+        rec.update(dict(patch))
+        _write_all(data)
+        return True

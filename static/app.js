@@ -42,6 +42,10 @@ async function loadBase() {
     $("baseState").textContent = c.public_base_url
       ? (c.is_public ? "✔ عنوان عام صالح (HTTPS)." : "⚠ هذا العنوان ليس HTTPS عامًا؛ المشاركة الخارجية لن تعمل.")
       : "⚠ لا يوجد عنوان عام بعد؛ روابط المشاركة محلية فقط.";
+    $("pagesUrl").value = c.pages_base_url || "";
+    $("pagesState").textContent = c.pages_base_url
+      ? (c.pages_is_public ? "✔ عنوان نشر دائم صالح." : "⚠ عنوان النشر ليس HTTPS عامًا.")
+      : "⚠ لا يوجد عنوان نشر دائم بعد.";
   } catch (e) { $("baseState").textContent = "تعذّر قراءة الإعداد: " + e.message; }
 }
 $("saveBase").onclick = async () => {
@@ -49,6 +53,13 @@ $("saveBase").onclick = async () => {
     const c = await api("/api/config", { public_base_url: $("baseUrl").value.trim() });
     $("baseState").textContent = c.is_public ? "✔ تم الحفظ؛ العنوان عام وصالح." : "⚠ تم الحفظ لكنه ليس HTTPS عامًا.";
   } catch (e) { $("baseState").textContent = "خطأ: " + e.message; }
+};
+$("savePages").onclick = async () => {
+  try {
+    const c = await api("/api/config", { pages_base_url: $("pagesUrl").value.trim() });
+    $("pagesUrl").value = c.pages_base_url || "";
+    $("pagesState").textContent = c.pages_is_public ? "✔ تم الحفظ؛ عنوان نشر دائم صالح." : "⚠ تم الحفظ لكنه ليس HTTPS عامًا.";
+  } catch (e) { $("pagesState").textContent = "خطأ: " + e.message; }
 };
 
 /* الفحص */
@@ -183,6 +194,7 @@ $("gen").onclick = async () => {
     $("finalPrev").innerHTML = `<img src="${r.preview_url}" alt="المعاينة النهائية">`;
     $("shareCard").classList.remove("hidden");
     $("shareUrl").value = r.share_url;
+    $("staticRow").classList.add("hidden"); $("staticUrl").value = ""; $("pubState").textContent = "";
     $("shareWarn").textContent = r.warning || "";
     setStatus($("genState"), `تم إنشاء معاينة ${r.width}×${r.height}`, "ok");
   } catch (e) {
@@ -211,11 +223,30 @@ $("testBtn").onclick = async () => {
     lines.push("التحويل عند الفتح في المتصفح ← " + (c.redirect_target || "؟"));
     lines.push("العنوان المستخدم: " + (c.base_used || ""));
     lines.push(c.is_public ? "✔ العنوان عام (HTTPS)." : "⚠ العنوان محلي — واتساب لن يصل إليه. اضبط عنوان HTTPS عامًا.");
+    if (c.static_url) lines.push("الرابط الدائم: " + c.static_url + (c.static_file_exists ? " (ملفاته موجودة ✔)" : " (ملفاته غير موجودة — انشر أولًا)"));
     if (c.base_mismatch) {
       lines.push("⚠ تحذير: هذا الرابط وُلد بعنوان قديم (" + (c.generated_with_base || "?") + ") — أعد التوليد بالعنوان الحالي وإلا بقيت صورته ميتة.");
     }
     $("ogOut").textContent = lines.join("\n");
   } catch (e) { $("ogOut").textContent = "فشل الاختبار: " + e.message; }
 };
+
+/* النشر الدائم على GitHub Pages */
+$("pubBtn").onclick = async () => {
+  if (!state.token) return;
+  $("pubState").textContent = "جارٍ تجهيز ملفات النشر…";
+  try {
+    const r = await api("/api/publish", { token: state.token });
+    $("staticRow").classList.remove("hidden");
+    $("staticUrl").value = r.static_url;
+    $("pubState").textContent = (r.pushed ? "✔ نُشر ودُفع تلقائيًا. " : "⚠ جُهز محليًا: نفّذ git push. ")
+      + (r.next || "") + (r.push_note ? " (" + r.push_note + ")" : "");
+  } catch (e) { $("pubState").textContent = "فشل النشر: " + e.message; }
+};
+$("copyStaticBtn").onclick = async () => {
+  try { await navigator.clipboard.writeText($("staticUrl").value); }
+  catch { $("staticUrl").select(); document.execCommand("copy"); }
+};
+$("openStaticBtn").onclick = () => { if ($("staticUrl").value) open($("staticUrl").value, "_blank"); };
 
 loadBase();

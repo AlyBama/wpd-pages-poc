@@ -4,6 +4,8 @@ import mimetypes
 import os
 import re
 import secrets
+import subprocess
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -28,6 +30,91 @@ UPLOAD_MAX_BYTES = 8_000_000
 UPLOAD_BODY_LIMIT = 9_500_000
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+
+# النشر الاستاتيكي (PoC): ملفات تُدفع إلى GitHub Pages في جذر المستودع
+STATIC_S_DIR = "s"
+STATIC_P_DIR = "p"
+
+
+def _write_static_files(repo_dir: str, token: str, record: dict,
+                        pages_base: str, jpeg_bytes: bytes):
+    """يكتب s/<token>.html وp/<token>.jpg و.nojekyll. يعيد (مسار HTML, مسار JPG)."""
+    if not sharekit.valid_token(token):
+        raise ValueError("رمز غير صالح")
+    if not isinstance(record, dict):
+        raise ValueError("سجل غير صالح")
+    if not jpeg_bytes or jpeg_bytes[:2] != b"\xff\xd8":
+        raise ValueError("صورة JPEG غير صالحة")
+    pages_base = (pages_base or "").rstrip("/")
+    if not pages_base.startswith("https://"):
+        raise ValueError("رابط النشر يجب أن يكون https عامًا")
+    s_path = os.path.join(repo_dir, STATIC_S_DIR, token + ".html")
+    p_path = os.path.join(repo_dir, STATIC_P_DIR, token + ".jpg")
+    os.makedirs(os.path.dirname(s_path), exist_ok=True)
+    os.makedirs(os.path.dirname(p_path), exist_ok=True)
+    page = sharekit.render_share_html(
+        title=record.get("title") or "مشاركة",
+        description=record.get("description") or "",
+        page_url=f"{pages_base}/s/{token}.html",
+        preview_url=f"{pages_base}/p/{token}.jpg",
+        target=record.get("original_url") or "")
+    with open(s_path, "w", encoding="utf-8") as f:
+        f.write(page)
+    with open(p_path, "wb") as f:
+        f.write(jpeg_bytes)
+    nojek = os.path.join(repo_dir, ".nojekyll")
+    if not os.path.exists(nojek):
+        with open(nojek, "w", encoding="utf-8") as f:
+            f.write("")
+    return s_path, p_path
+
+
+def _git_run(repo_dir: str, *args, timeout=30):
+    env = dict(os.environ)
+    env["GIT_CONFIG_COUNT"] = "1"
+    env["GIT_CONFIG_KEY_0"] = "safe.directory"
+    env["GIT_CONFIG_VALUE_0"] = repo_dir
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return subprocess.run(
+        ["git", "-C", repo_dir, "-c", "user.name=wpd",
+         "-c", "user.email=wpd@localhost"] + list(args),
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL, timeout=timeout)
+
+
+def _git_commit(repo_dir: str, paths, message: str) -> bool:
+    """يثبّت المسارات محليًا. يعيد True إذا أُنشئ commit جديد."""
+    r = _git_run(repo_dir, "add", "--", *paths)
+    if r.returncode != 0:
+        raise RuntimeError("git add فشل")
+    r = _git_run(repo_dir, "commit", "-m", message)
+    out = r.stdout.decode("utf-8", "replace")
+    if r.returncode == 0:
+        return True
+    if "nothing to commit" in out:
+        return False
+    raise RuntimeError("git commit فشل: " + out.strip().splitlines()[-1][:120])
+
+
+def _git_push(repo_dir: str, timeout=60):
+    """يحاول الدفع دون أي مطالبة تفاعلية. يعيد (نجح؟, ملاحظة)."""
+    try:
+        r = _git_run(repo_dir, "push", "-u", "origin", "HEAD:main", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, "انتهت مهلة الدفع (60s)"
+    out = r.stdout.decode("utf-8", "replace")
+    if r.returncode == 0:
+        return True, ""
+    low = out.lower()
+    if "could not read username" in low or "authentication failed" in low or "403" in low:
+        return False, ("الدفع يحتاج صلاحية: نفّذ git push مرة واحدة يدويًا "
+                       "وأدخل رمز PAT، أو فعّل credential.helper")
+    if "no remote" in low or "does not appear to be a git" in low:
+        return False, "لا يوجد مستودع بعيد — اربط origin أولًا"
+    if "rejected" in low or "fetch first" in low:
+        return False, "الفرع البعيد متقدم — اسحب (pull) أولًا ثم أعد النشر"
+    last = [ln for ln in out.strip().splitlines() if ln.strip()]
+    return False, (last[-1][:150] if last else "فشل الدفع")
 
 
 def _json(handler, obj, status=200, head_only=False):
@@ -174,7 +261,43 @@ class Handler(BaseHTTPRequestHandler):
         data = sharekit.assemble_sharecheck(
             record=rec, token=token, base=base, is_public=is_public,
             preview_dir=PREVIEW_DIR)
+        data["static_url"] = rec.get("static_url") or ""
+        data["static_file_exists"] = os.path.isfile(
+            os.path.join(BASE_DIR, STATIC_S_DIR, token + ".html"))
         return _json(self, data, head_only=head_only)
+
+    def _handle_publish(self, obj):
+        token = str(obj.get("token") or "").strip()
+        if not sharekit.valid_token(token):
+            return _err(self, "رمز غير صالح", status=400)
+        rec = store.get_share(token)
+        if not rec:
+            return _err(self, "المشاركة غير موجودة", status=404)
+        cfg = config.load_config()
+        pages = cfg["pages_base_url"]
+        if not pages or not cfg["pages_is_public"]:
+            return _err(self, "اضبط رابط النشر الدائم (https عام) أولًا", status=400)
+        jpeg = sharekit.read_preview(PREVIEW_DIR, token)
+        if not jpeg:
+            return _err(self, "صورة المعاينة غير موجودة — أعد التوليد", status=410)
+        try:
+            _write_static_files(BASE_DIR, token, rec, pages, jpeg)
+            committed = _git_commit(BASE_DIR, ["s", "p", ".nojekyll"],
+                                    "publish " + token)
+        except (ValueError, RuntimeError, OSError) as e:
+            return _err(self, f"فشل النشر المحلي: {e}", status=500)
+        static_url = f"{pages}/s/{token}.html"
+        store.update_share(token, {"static_url": static_url,
+                                   "static_published_at": int(time.time()),
+                                   "static_committed": bool(committed)})
+        pushed, push_note = _git_push(BASE_DIR)
+        return _json(self, {"ok": True, "token": token, "static_url": static_url,
+                            "static_image_url": f"{pages}/p/{token}.jpg",
+                            "committed": bool(committed), "pushed": pushed,
+                            "push_note": push_note,
+                            "next": ("نُشر ودُفع تلقائيًا — انتظر دقيقة ثم افتح الرابط"
+                                     if pushed else
+                                     "جُهز محليًا — نفّذ git push ثم افتح الرابط")})
 
     def _serve_preview(self, token, head_only=False):
         body = sharekit.read_preview(PREVIEW_DIR, token)
@@ -224,7 +347,8 @@ class Handler(BaseHTTPRequestHandler):
                     obj = _read_json(self)
                 except ValueError as e:
                     return _err(self, str(e), status=400)
-                cfg = config.save_config(str(obj.get("public_base_url") or ""))
+                cfg = config.save_config(str(obj.get("public_base_url") or ""),
+                                           obj.get("pages_base_url"))
                 return _json(self, {"ok": True, **cfg})
             if path == "/api/analyze":
                 try:
@@ -251,6 +375,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._handle_generate(obj)
             if path == "/api/upload":
                 return self._handle_upload()
+            if path == "/api/publish":
+                try:
+                    obj = _read_json(self)
+                except ValueError as e:
+                    return _err(self, str(e), status=400)
+                return self._handle_publish(obj)
             if path.startswith("/api/"):
                 return _err(self, "مسار غير معروف", status=404)
             return _err(self, "مسار غير معروف", status=404)

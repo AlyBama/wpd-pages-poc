@@ -22,6 +22,13 @@
       <button id="saveBase" class="btn sec">حفظ</button>
     </div>
     <p id="baseState" class="hint"></p>
+    <h3>رابط النشر الدائم (GitHub Pages)</h3>
+    <p class="hint">يُستخدم لتوليد روابط دائمة لا تموت، مثل https://USER.github.io/REPO</p>
+    <div class="row">
+      <input id="pagesUrl" type="url" placeholder="https://USER.github.io/REPO" dir="ltr">
+      <button id="savePages" class="btn sec">حفظ</button>
+    </div>
+    <p id="pagesState" class="hint"></p>
   </section>
 
   <section class="card">
@@ -79,8 +86,15 @@
     </div>
     <div class="row">
       <button id="testBtn" class="btn sec">اختبار بيانات المعاينة</button>
+      <button id="pubBtn" class="btn">نشر دائم 📢</button>
     </div>
     <p id="shareWarn" class="warn"></p>
+    <div class="row hidden" id="staticRow">
+      <input id="staticUrl" readonly dir="ltr">
+      <button id="copyStaticBtn" class="btn sec">نسخ الدائم</button>
+      <button id="openStaticBtn" class="btn sec">فتح</button>
+    </div>
+    <p id="pubState" class="hint"></p>
     <pre id="ogOut" class="og" dir="ltr"></pre>
   </section>
 

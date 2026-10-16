@@ -32,25 +32,46 @@ def _is_local_host(host: str) -> bool:
 
 def load_config() -> dict:
     base = (os.environ.get("PUBLIC_BASE_URL") or "").strip()
+    pages = (os.environ.get("PAGES_BASE_URL") or "").strip()
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             disk = json.load(f)
-            if not base and isinstance(disk, dict):
-                base = str(disk.get("public_base_url") or "").strip()
+            if isinstance(disk, dict):
+                if not base:
+                    base = str(disk.get("public_base_url") or "").strip()
+                if not pages:
+                    pages = str(disk.get("pages_base_url") or "").strip()
     except (OSError, ValueError):
         pass
     base = base.rstrip("/")
-    return {"public_base_url": base, "is_public": is_public_base(base)}
+    pages = pages.rstrip("/")
+    return {"public_base_url": base, "is_public": is_public_base(base),
+            "pages_base_url": pages, "pages_is_public": is_public_base(pages)}
 
 
-def save_config(public_base_url: str) -> dict:
+def save_config(public_base_url: str, pages_base_url=None) -> dict:
     base = (public_base_url or "").strip().rstrip("/")
     os.makedirs(DATA_DIR, exist_ok=True)
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            disk = json.load(f)
+            if not isinstance(disk, dict):
+                disk = {}
+    except (OSError, ValueError):
+        disk = {}
+    if pages_base_url is None:
+        # الحفاظ على القيمة المخزنة عند عدم إرسالها
+        pages = str(disk.get("pages_base_url") or "").strip().rstrip("/")
+    else:
+        pages = str(pages_base_url or "").strip().rstrip("/")
+    disk["public_base_url"] = base
+    disk["pages_base_url"] = pages
     tmp = CONFIG_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump({"public_base_url": base}, f, ensure_ascii=False)
+        json.dump(disk, f, ensure_ascii=False)
     os.replace(tmp, CONFIG_PATH)
-    return {"public_base_url": base, "is_public": is_public_base(base)}
+    return {"public_base_url": base, "is_public": is_public_base(base),
+            "pages_base_url": pages, "pages_is_public": is_public_base(pages)}
 
 
 def is_public_base(base: str) -> bool:
