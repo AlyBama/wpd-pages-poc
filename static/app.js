@@ -34,6 +34,23 @@ function thumbMeta(im) {
   return `${src}\n${dim}`;
 }
 
+/* نبض الخادم: يميّز «الخادم ميت» عن «الموقع محجوب» قبل أي فحص */
+async function checkServer() {
+  const el = $("srvState");
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch("/api/health", { signal: ctl.signal });
+    clearTimeout(t);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    if (el) { el.textContent = "● الخادم المحلي يعمل"; el.style.color = "#86efac"; }
+    return true;
+  } catch (e) {
+    if (el) { el.textContent = "● الخادم المحلي لا يرد — شغّله ثم أعد تحميل الصفحة"; el.style.color = "#fca5a5"; }
+    return false;
+  }
+}
+
 /* الإعداد العام */
 async function loadBase() {
   try {
@@ -68,6 +85,11 @@ $("scan").onclick = async () => {
   const url = $("url").value.trim();
   if (!url) { setStatus($("status"), "أدخل رابطًا أولًا", "err"); return; }
   btn.disabled = true;
+  if (!await checkServer()) {
+    setStatus($("status"), "تعذّر الوصول إلى الخادم المحلي — شغّله أولًا (bash run.sh داخل مجلد التطبيق) ثم أعد المحاولة.", "err");
+    btn.disabled = false;
+    return;
+  }
   setStatus($("status"), "جارٍ الفحص…", "");
   ["pageCard", "galCard", "modeCard", "shareCard"].forEach((id) => $(id).classList.add("hidden"));
   $("gallery").innerHTML = ""; $("defBox").innerHTML = ""; $("ogOut").textContent = "";
@@ -249,4 +271,6 @@ $("copyStaticBtn").onclick = async () => {
 };
 $("openStaticBtn").onclick = () => { if ($("staticUrl").value) open($("staticUrl").value, "_blank"); };
 
+checkServer();
+setInterval(checkServer, 30000);
 loadBase();
