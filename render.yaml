@@ -1,0 +1,15 @@
+# النشر المجاني الدائم على Render (بلا بطاقة بنكية) — بديل دائم للنفق المؤقت
+# الطريقة: New → Blueprint في لوحة Render واختيار هذا المستودع.
+# ملاحظة: الخطة المجانية بلا قرص دائم، لذا تجنّب إعادة النشر دون حاجة
+# (إعادة النشر تمسح المعاينات القديمة — أعد توليد روابطها عندها).
+services:
+  - type: web
+    name: wpd-shares
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # اتركه فارغًا أثناء الإنشاء، ثم الصق رابط onrender النهائي هنا من اللوحة
+      - key: PUBLIC_BASE_URL
+        sync: false

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>طبيب معاينة واتساب</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>🩺 طبيب معاينة واتساب</h1>
+  <p class="sub">افحص الرابط • اختر الصورة • جهّز المعاينة • أنشئ رابط مشاركة</p>
+</header>
+
+<main class="wrap">
+
+  <section class="card" id="cfgCard">
+    <h2>العنوان العام (HTTPS)</h2>
+    <p class="hint">واتساب يحتاج رابطًا عامًا عبر الإنترنت. بدون عنوان عام، تعمل الروابط محليًا فقط.</p>
+    <div class="row">
+      <input id="baseUrl" type="url" placeholder="https://example-tunnel.trycloudflare.com" dir="ltr">
+      <button id="saveBase" class="btn sec">حفظ</button>
+    </div>
+    <p id="baseState" class="hint"></p>
+  </section>
+
+  <section class="card">
+    <h2>1. فحص الرابط</h2>
+    <div class="row">
+      <input id="url" type="url" placeholder="https://example.com/article" dir="ltr">
+      <button id="scan" class="btn">افحص الرابط</button>
+    </div>
+    <div id="status" class="status" role="status"></div>
+  </section>
+
+  <section class="card hidden" id="pageCard">
+    <h2>2. بيانات الصفحة</h2>
+    <div class="kv"><span>العنوان</span><b id="pTitle">—</b></div>
+    <div class="kv"><span>الوصف</span><b id="pDesc">—</b></div>
+    <div class="kv"><span>الرابط النهائي</span><b id="pFinal" dir="ltr">—</b></div>
+    <p id="defNote" class="hint"></p>
+    <h3>الصورة الافتراضية</h3>
+    <div id="defBox" class="defbox"></div>
+  </section>
+
+  <section class="card hidden" id="galCard">
+    <h2>3. الصور البديلة <small id="galCount"></small></h2>
+    <p class="hint">اضغط على أي صورة صالحة لاختيارها. الصور الفاشلة لا يمكن اختيارها.</p>
+    <div id="gallery" class="gallery"></div>
+  </section>
+
+  <section class="card hidden" id="modeCard">
+    <h2>4. طريقة العرض</h2>
+    <div class="modes">
+      <label><input type="radio" name="mode" value="cover" checked> ملء الإطار (Cover)</label>
+      <label><input type="radio" name="mode" value="contain"> الصورة كاملة (Contain)</label>
+      <label><input type="radio" name="mode" value="blur"> خلفية مموهة (Blur)</label>
+    </div>
+    <h3>أو ارفع صورة من جهازك</h3>
+    <p class="hint">إذا حجب الموقع صورَه (خطأ 403) يمكنك رفع الصورة يدويًا وستُستخدم بدلًا من صور الموقع.</p>
+    <div class="row">
+      <input id="upFile" type="file" accept="image/*">
+      <button id="upBtn" class="btn sec">رفع الصورة</button>
+    </div>
+    <p id="upState" class="hint"></p>
+    <div class="row">
+      <button id="gen" class="btn">تجهيز المعاينة 1200×630</button>
+    </div>
+    <div id="genState" class="status"></div>
+    <div id="finalPrev"></div>
+  </section>
+
+  <section class="card hidden" id="shareCard">
+    <h2>5. رابط المشاركة</h2>
+    <div class="row">
+      <input id="shareUrl" readonly dir="ltr">
+      <button id="copyBtn" class="btn sec">نسخ</button>
+      <button id="openBtn" class="btn sec">فتح</button>
+    </div>
+    <div class="row">
+      <button id="testBtn" class="btn sec">اختبار بيانات المعاينة</button>
+    </div>
+    <p id="shareWarn" class="warn"></p>
+    <pre id="ogOut" class="og" dir="ltr"></pre>
+  </section>
+
+  <section class="card">
+    <h2>التشخيص <button id="diagToggle" class="btn tiny">إظهار</button></h2>
+    <div id="diag" class="hidden">
+      <div id="diagBody"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>ربط نفق HTTPS</h2>
+    <ol class="hint">
+      <li>ثبّت cloudflared ثم نفّذ: <code dir="ltr">cloudflared tunnel --url http://127.0.0.1:8081</code></li>
+      <li>انسخ عنوان https الناتج والصقه في «العنوان العام» ثم احفظ.</li>
+      <li>أنشئ رابط المشاركة من جديد وشاركه على واتساب.</li>
+      <li>ملاحظة: قد تحتفظ واتساب بنسخة مخزنة؛ المعاينة ليست فورية ولا مضمونة.</li>
+    </ol>
+  </section>
+
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

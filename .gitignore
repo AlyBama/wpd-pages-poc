@@ -1,0 +1,6 @@
+# ملفات لا تُرفع إلى GitHub
+__pycache__/
+*/__pycache__/
+*.pyc
+*.bak-*
+data/
